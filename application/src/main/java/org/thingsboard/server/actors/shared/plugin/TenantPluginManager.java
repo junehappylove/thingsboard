@@ -1,5 +1,5 @@
 /**
- * Copyright © 2016-2017 The Thingsboard Authors
+ * Copyright © 2016-2018 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 package org.thingsboard.server.actors.shared.plugin;
 
+import akka.actor.ActorContext;
 import org.thingsboard.server.actors.ActorSystemContext;
 import org.thingsboard.server.actors.service.DefaultActorService;
 import org.thingsboard.server.common.data.id.TenantId;
@@ -28,6 +29,13 @@ public class TenantPluginManager extends PluginManager {
     public TenantPluginManager(ActorSystemContext systemContext, TenantId tenantId) {
         super(systemContext);
         this.tenantId = tenantId;
+    }
+
+    @Override
+    public void init(ActorContext context) {
+        if (systemContext.isTenantComponentsInitEnabled()) {
+            super.init(context);
+        }
     }
 
     @Override

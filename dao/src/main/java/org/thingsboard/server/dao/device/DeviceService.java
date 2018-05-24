@@ -1,5 +1,5 @@
 /**
- * Copyright © 2016-2017 The Thingsboard Authors
+ * Copyright © 2016-2018 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.thingsboard.server.dao.device;
 import com.google.common.util.concurrent.ListenableFuture;
 import org.thingsboard.server.common.data.Device;
 import org.thingsboard.server.common.data.EntitySubtype;
+import org.thingsboard.server.common.data.device.DeviceSearchQuery;
 import org.thingsboard.server.common.data.id.CustomerId;
 import org.thingsboard.server.common.data.id.DeviceId;
 import org.thingsboard.server.common.data.id.TenantId;
@@ -33,7 +34,7 @@ public interface DeviceService {
 
     ListenableFuture<Device> findDeviceByIdAsync(DeviceId deviceId);
 
-    Optional<Device> findDeviceByTenantIdAndName(TenantId tenantId, String name);
+    Device findDeviceByTenantIdAndName(TenantId tenantId, String name);
 
     Device saveDevice(Device device);
 

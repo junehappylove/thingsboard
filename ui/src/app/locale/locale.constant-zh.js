@@ -1,5 +1,5 @@
 /*
- * Copyright © 2016-2017 The Thingsboard Authors
+ * Copyright © 2016-2018 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 export default function addLocaleChinese(locales) {
     var zh_CN = {
         "access": {
@@ -280,6 +279,38 @@ export default function addLocaleChinese(locales) {
             "add-widget-to-dashboard": "将部件添加到仪表板",
             "selected-attributes": "{ count, select, 1 {1 属性} other {# 属性} } 被选中",
             "selected-telemetry": "{ count, select, 1 {1 遥测} other {# 遥测} } 被选中"
+        },
+        "audit-log": {
+            "audit": "审计",
+            "audit-logs": "审计日志",
+            "timestamp": "时间戳",
+            "entity-type": "实体类型",
+            "entity-name": "实体名称",
+            "user": "用户",
+            "type": "类型",
+            "status": "状态",
+            "details": "详情",
+            "type-added": "添加",
+            "type-deleted": "删除",
+            "type-updated": "更新",
+            "type-attributes-updated": "更新属性",
+            "type-attributes-deleted": "删除属性",
+            "type-rpc-call": "RPC调用",
+            "type-credentials-updated": "更新凭证",
+            "type-assigned-to-customer": "分配给客户",
+            "type-unassigned-from-customer": "未分配给客户",
+            "type-activated": "激活",
+            "type-suspended": "暂停",
+            "type-credentials-read": "读取凭证",
+            "type-attributes-read": "读取属性",
+            "status-success": "成功",
+            "status-failure": "失败",
+            "audit-log-details": "审计日志详情",
+            "no-audit-logs-prompt": "找不到日志",
+            "action-data": "活动数据",
+            "failure-details": "失败详情",
+            "search": "查找审计日志",
+            "clear-search": "清空查找"
         },
         "confirm-on-exit": {
             "message": "您有未保存的更改。确定要离开此页吗？",
