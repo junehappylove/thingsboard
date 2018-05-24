@@ -1,5 +1,5 @@
 /**
- * Copyright © 2016-2017 The Thingsboard Authors
+ * Copyright © 2016-2018 The Thingsboard Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,16 +35,18 @@ import org.thingsboard.server.common.msg.session.ctrl.SessionCloseMsg;
 import org.thingsboard.server.common.transport.SessionMsgProcessor;
 import org.thingsboard.server.common.transport.adaptor.AdaptorException;
 import org.thingsboard.server.common.transport.auth.DeviceAuthService;
+import org.thingsboard.server.common.transport.quota.QuotaService;
 import org.thingsboard.server.dao.EncryptionUtil;
 import org.thingsboard.server.dao.device.DeviceService;
 import org.thingsboard.server.dao.relation.RelationService;
 import org.thingsboard.server.transport.mqtt.adaptors.MqttTransportAdaptor;
-import org.thingsboard.server.transport.mqtt.session.GatewaySessionCtx;
 import org.thingsboard.server.transport.mqtt.session.DeviceSessionCtx;
+import org.thingsboard.server.transport.mqtt.session.GatewaySessionCtx;
 import org.thingsboard.server.transport.mqtt.util.SslUtil;
 
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.security.cert.X509Certificate;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -69,12 +71,14 @@ public class MqttTransportHandler extends ChannelInboundHandlerAdapter implement
     private final DeviceService deviceService;
     private final DeviceAuthService authService;
     private final RelationService relationService;
+    private final QuotaService quotaService;
     private final SslHandler sslHandler;
     private volatile boolean connected;
+    private volatile InetSocketAddress address;
     private volatile GatewaySessionCtx gatewaySessionCtx;
 
     public MqttTransportHandler(SessionMsgProcessor processor, DeviceService deviceService, DeviceAuthService authService, RelationService relationService,
-                                MqttTransportAdaptor adaptor, SslHandler sslHandler) {
+                                MqttTransportAdaptor adaptor, SslHandler sslHandler, QuotaService quotaService) {
         this.processor = processor;
         this.deviceService = deviceService;
         this.relationService = relationService;
@@ -83,6 +87,7 @@ public class MqttTransportHandler extends ChannelInboundHandlerAdapter implement
         this.deviceSessionCtx = new DeviceSessionCtx(processor, authService, adaptor);
         this.sessionId = deviceSessionCtx.getSessionId().toUidStr();
         this.sslHandler = sslHandler;
+        this.quotaService = quotaService;
     }
 
     @Override
@@ -94,6 +99,19 @@ public class MqttTransportHandler extends ChannelInboundHandlerAdapter implement
     }
 
     private void processMqttMsg(ChannelHandlerContext ctx, MqttMessage msg) {
+        address = (InetSocketAddress) ctx.channel().remoteAddress();
+        if (msg.fixedHeader() == null) {
+            log.info("[{}:{}] Invalid message received", address.getHostName(), address.getPort());
+            processDisconnect(ctx);
+            return;
+        }
+
+        if (quotaService.isQuotaExceeded(address.getHostName())) {
+            log.warn("MQTT Quota exceeded for [{}:{}] . Disconnect", address.getHostName(), address.getPort());
+            processDisconnect(ctx);
+            return;
+        }
+
         deviceSessionCtx.setChannel(ctx);
         switch (msg.fixedHeader().messageType()) {
             case CONNECT:
@@ -118,7 +136,10 @@ public class MqttTransportHandler extends ChannelInboundHandlerAdapter implement
                     processDisconnect(ctx);
                 }
                 break;
+            default:
+                break;
         }
+
     }
 
     private void processPublish(ChannelHandlerContext ctx, MqttPublishMessage mqttMsg) {
@@ -132,26 +153,30 @@ public class MqttTransportHandler extends ChannelInboundHandlerAdapter implement
         if (topicName.startsWith(BASE_GATEWAY_API_TOPIC)) {
             if (gatewaySessionCtx != null) {
                 gatewaySessionCtx.setChannel(ctx);
-                try {
-                    if (topicName.equals(GATEWAY_TELEMETRY_TOPIC)) {
-                        gatewaySessionCtx.onDeviceTelemetry(mqttMsg);
-                    } else if (topicName.equals(GATEWAY_ATTRIBUTES_TOPIC)) {
-                        gatewaySessionCtx.onDeviceAttributes(mqttMsg);
-                    } else if (topicName.equals(GATEWAY_ATTRIBUTES_REQUEST_TOPIC)) {
-                        gatewaySessionCtx.onDeviceAttributesRequest(mqttMsg);
-                    } else if (topicName.equals(GATEWAY_RPC_TOPIC)) {
-                        gatewaySessionCtx.onDeviceRpcResponse(mqttMsg);
-                    } else if (topicName.equals(GATEWAY_CONNECT_TOPIC)) {
-                        gatewaySessionCtx.onDeviceConnect(mqttMsg);
-                    } else if (topicName.equals(GATEWAY_DISCONNECT_TOPIC)) {
-                        gatewaySessionCtx.onDeviceDisconnect(mqttMsg);
-                    }
-                } catch (RuntimeException | AdaptorException e) {
-                    log.warn("[{}] Failed to process publish msg [{}][{}]", sessionId, topicName, msgId, e);
-                }
+                handleMqttPublishMsg(topicName, msgId, mqttMsg);
             }
         } else {
             processDevicePublish(ctx, mqttMsg, topicName, msgId);
+        }
+    }
+
+    private void handleMqttPublishMsg(String topicName, int msgId, MqttPublishMessage mqttMsg) {
+        try {
+            if (topicName.equals(GATEWAY_TELEMETRY_TOPIC)) {
+                gatewaySessionCtx.onDeviceTelemetry(mqttMsg);
+            } else if (topicName.equals(GATEWAY_ATTRIBUTES_TOPIC)) {
+                gatewaySessionCtx.onDeviceAttributes(mqttMsg);
+            } else if (topicName.equals(GATEWAY_ATTRIBUTES_REQUEST_TOPIC)) {
+                gatewaySessionCtx.onDeviceAttributesRequest(mqttMsg);
+            } else if (topicName.equals(GATEWAY_RPC_TOPIC)) {
+                gatewaySessionCtx.onDeviceRpcResponse(mqttMsg);
+            } else if (topicName.equals(GATEWAY_CONNECT_TOPIC)) {
+                gatewaySessionCtx.onDeviceConnect(mqttMsg);
+            } else if (topicName.equals(GATEWAY_DISCONNECT_TOPIC)) {
+                gatewaySessionCtx.onDeviceDisconnect(mqttMsg);
+            }
+        } catch (RuntimeException | AdaptorException e) {
+            log.warn("[{}] Failed to process publish msg [{}][{}]", sessionId, topicName, msgId, e);
         }
     }
 
@@ -212,6 +237,8 @@ public class MqttTransportHandler extends ChannelInboundHandlerAdapter implement
                     grantedQoSList.add(getMinSupportedQos(reqQoS));
                 } else if (topicName.equals(DEVICE_ATTRIBUTES_RESPONSES_TOPIC)) {
                     deviceSessionCtx.setAllowAttributeResponses();
+                    grantedQoSList.add(getMinSupportedQos(reqQoS));
+                } else if (topicName.equals(GATEWAY_ATTRIBUTES_TOPIC)) {
                     grantedQoSList.add(getMinSupportedQos(reqQoS));
                 } else {
                     log.warn("[{}] Failed to subscribe to [{}][{}]", sessionId, topicName, reqQoS);
@@ -313,9 +340,11 @@ public class MqttTransportHandler extends ChannelInboundHandlerAdapter implement
 
     private void processDisconnect(ChannelHandlerContext ctx) {
         ctx.close();
-        processor.process(SessionCloseMsg.onDisconnect(deviceSessionCtx.getSessionId()));
-        if (gatewaySessionCtx != null) {
-            gatewaySessionCtx.onGatewayDisconnect();
+        if (connected) {
+            processor.process(SessionCloseMsg.onDisconnect(deviceSessionCtx.getSessionId()));
+            if (gatewaySessionCtx != null) {
+                gatewaySessionCtx.onGatewayDisconnect();
+            }
         }
     }
 
