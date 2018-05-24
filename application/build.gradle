@@ -22,6 +22,8 @@ buildscript {
     }
     repositories {
         jcenter()
+        //if you are a Chinese,you may be like to use below
+        maven{ url 'http://maven.aliyun.com/nexus/content/groups/public/'}
     }
     dependencies {
         classpath("com.netflix.nebula:gradle-ospackage-plugin:${osPackageVersion}")
